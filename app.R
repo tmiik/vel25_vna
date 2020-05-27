@@ -63,7 +63,6 @@ lev2 = "TN004-Si"
 
 
 
-
 SaveData = function() {
     outfilename = paste0(folder, "\\\\", 'data_out.csv')
     write.table(out, outfilename, sep = ",",
@@ -250,6 +249,7 @@ server <- function(input, output) {
     
     
     
+    infomessage('location', getwd())
     
     
     
