@@ -249,8 +249,19 @@ server <- function(input, output) {
     
     
     
-    infomessage('location', getwd())
+    w_folder = getwd()
+    #infomessage('location', w_folder)
+
+    fname = gsub('bin/tmp/tmp/vel25_vna-master', 'work_file.xlsm', w_folder)
     
+    if (file.exists(fname)) {
+        
+        setts  <- read_excel(fname, sheet = "Setup")
+        s = setts[which(setts$Name == 'browser'), ]$Path
+        
+        infomessage('browser', s)
+
+    }      
     
     
     
