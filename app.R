@@ -1,13 +1,14 @@
 
-
+# color parameters from file
+# make color range reactive
+# filters
+# heat map pixel highlight
 
 
 #====================================================
 
 rm(list=ls())
 graphics.off()
-
-
 
 
 mirror = 'https://cloud.r-project.org/'
@@ -21,6 +22,7 @@ if (!is.element("writexl", installed.packages()[,1])) {install.packages("writexl
 if (!is.element("tidyverse", installed.packages()[,1])) {install.packages("tidyverse", dependencies = TRUE, repos= mirror)}
 if (!is.element("plotly", installed.packages()[,1])) {install.packages("plotly", dependencies = TRUE, repos = mirror)}
 if (!is.element("readr", installed.packages()[,1])) {install.packages("readr", dependencies = TRUE, repos= mirror)}
+if (!is.element("reshape2", installed.packages()[,1])) {install.packages("reshape2", dependencies = TRUE, repos= mirror)}
 
 #------------------------ shinyShortcut
 #if (!is.element("devtools", installed.packages()[,1])) {install.packages("devtools", dependencies = TRUE, repos= mirror)}
@@ -64,11 +66,10 @@ infomessage = function(title, txt)
 #   add all possible control and logging!!!!
 
 w_folder = 'H:/PD/Vel25/data2/bin/tmp/tmp/vel25_vna-master'
-w_folder = getwd()
+#w_folder = getwd()
 
 
 w_fname = gsub('bin/tmp/tmp/vel25_vna-master', 'work_file.xlsm', w_folder)
-#infomessage('location', w_fname)
 print(w_fname)
 
 
@@ -76,20 +77,8 @@ print(w_fname)
 # d_folder = 'H:\\PD\\Vel25\\data2\\data_load'
 # max_col = 5  # maximum number of columns in dataset
 
-
-
-
-
-SaveData = function() {
-    outfilename = paste0(w_folder, "\\\\", 'data_out.csv')
-    write.table(out, outfilename, sep = ",",
-                col.names = !file.exists(outfilename), row.names = F, append = T)
-    
-    outfilename = paste0(w_folder, "\\\\", 'info_out.csv')
-    write.table(info, outfilename, sep = ",",
-                col.names = !file.exists(outfilename), row.names = F, append = T)
-
-}
+# get user name
+# Sys.getenv("USERNAME")
 
 
 
@@ -109,7 +98,9 @@ ui <- fluidPage(
     # Sidebar with a slider input for number of bins 
     sidebarLayout(
         sidebarPanel(
-            actionButton("data_up_butt", "Load data"),
+            actionButton("data_up_butt", "Load data", width='100%'),
+            actionButton("data_sh_butt", "Show data",  width='100%'),
+
             br(), br(),
             pickerInput("Lev1_input", "Level 1:",  choices = c(''), 
                         options = list('actions-box' = TRUE), multiple = FALSE) ,
@@ -130,7 +121,15 @@ ui <- fluidPage(
                      column(width=6,
                             plotlyOutput("heatmap2") )
 
-            )
+            ),
+            fluidRow(width=16,
+                     column(width=6,
+                            plotlyOutput("heatmap3") ),
+                     
+                     column(width=6,
+                            plotlyOutput("heatmap4") )
+                     
+            )            
         )
     )
 )
@@ -140,57 +139,53 @@ ui <- fluidPage(
 # Define server logic required to draw a histogram
 server <- function(input, output, session) {
 
-    
-    if (!file.exists(w_fname)) {
-        s = paste0('No file ', w_fname, '!')
-        infomessage('Error', s)
-        stop(s)
-    }
-    
-    setts  <- read_excel(w_fname, sheet = "Run")
-    
-    if (length(setts)==0) {
-        s = paste0('Unable to read settings from the file: ', w_fname)
-        infomessage('Error', s)
-        stop(s)    
-    }
-    
-    d_folder = setts[which(setts$Name == 'd_folder'), ]$Value
-    max_col = as.numeric(setts[which(setts$Name == 'max_col'), ]$Value)
-    
-    
-    if (length(d_folder)==0) {
-        s = paste0('Parameter d_folder not found!')
-        infomessage('Error', s)
-        stop(s)    
-    }
-    if (length(max_col)==0) {
-        s = paste0('Parameter max_col not found!')
-        infomessage('Error', s)
-        stop(s)    
-    }
-    
-    lev2 = "TN004-Si"
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    rea <- reactiveValues(df_ht = NULL)
-    
-    
-    
-    UploadData = function() {
+    LoadSetts = function(w_fname) {
         
-        #d_list = list.dirs(folder)
-        #f_list = dir(folder, include.dirs = FALSE, recursive=TRUE)
+        if (!file.exists(w_fname)) {
+            s = paste0('No file ', w_fname, '')
+            infomessage('Error', s)
+            return(-1) 
+        }
         
+        setts  <- read_excel(w_fname, sheet = "Run")
+        
+        if (length(setts)==0) {
+            s = paste0('Unable to read settings from the file: ', w_fname)
+            infomessage('Error', s)
+            return(-1)     
+        }
+        
+        d_folder <<- setts[which(setts$Name == 'd_folder'), ]$Value
+        max_col <<- as.numeric(setts[which(setts$Name == 'max_col'), ]$Value)
+        fmax <<- as.numeric(setts[which(setts$Name == 'fmax'), ]$Value) *1e6
+        fmin <<- as.numeric(setts[which(setts$Name == 'fmin'), ]$Value) *1e6
+        zmax <<- as.numeric(setts[which(setts$Name == 'zmax'), ]$Value)
+        zmin <<- as.numeric(setts[which(setts$Name == 'zmin'), ]$Value)  
+        rmax <<- as.numeric(setts[which(setts$Name == 'rmax'), ]$Value)
+        rmin <<- as.numeric(setts[which(setts$Name == 'rmin'), ]$Value)  
+        xmax <<- as.numeric(setts[which(setts$Name == 'xmax'), ]$Value)
+        xmin <<- as.numeric(setts[which(setts$Name == 'xmin'), ]$Value)      
+        
+        if (length(d_folder)==0) {
+            s = paste0('Parameter d_folder not found!')
+            infomessage('Error', s)
+            return(-1)    
+        }
+        if (length(max_col)==0) {
+            s = paste0('Parameter max_col not found!')
+            infomessage('Error', s)
+            return(-1)    
+        }
+    
+    
+        lev2 <<- "TN004-Si"
+        return(0)   
+    }
+    
+    LoadSetts(w_fname) # call settings load
+    
+ 
+    UploadData = function(d_folder) {
         
         # list of available files
         f_list = list.files(d_folder, include.dirs = FALSE, recursive=TRUE)
@@ -234,7 +229,7 @@ server <- function(input, output, session) {
             f_name = f_list[3]  
             for (f_name in f_list) {
                 
-                incProgress(1/length(f_list), detail = '')
+                incProgress(1/length(f_list), detail = 'data loading')
                 setProgress(message = f_name)
                 
                 print('......................................................')
@@ -309,18 +304,102 @@ server <- function(input, output, session) {
     }
     
     
-    
+
+    SaveData = function(w_folder) {
+        fdir = gsub('bin/tmp/tmp/vel25_vna-master', '', w_folder)
+        
+        outfilename = paste0(fdir, 'data_out.csv')
+        write.table(data_0, outfilename, sep = ",",
+                    col.names = !file.exists(outfilename), row.names = F, append = F)
+        
+        outfilename = paste0(fdir, 'info_out.xlsx')
+        write_xlsx(list(Info = info_0, HM_data = df_ht_0), outfilename)        
+        # write.table(info_0, outfilename, sep = ",",
+        #             col.names = !file.exists(outfilename), row.names = F, append = F)
+    }
 
     
+    ReadData = function(w_folder) {
+        fdir = gsub('bin/tmp/tmp/vel25_vna-master', '', w_folder)
+        
+        outfilename = paste0(fdir, 'data_out.csv')
+        if (!file.exists(outfilename)) {
+            infomessage('Error', 'Please load data')            
+            return(-1)
+        }
+        data_0  <<- read_csv(outfilename,  col_types = cols())
+        
+        outfilename = paste0(fdir, 'info_out.xlsx')
+        if (!file.exists(outfilename)) {
+            infomessage('Error', 'Please load data')            
+            return(-1)
+        }
+        info_0  <<- read_excel(outfilename, sheet = "Info")
+        df_ht_0  <<- read_excel(outfilename, sheet = "HM_data")
+        
+        r = LoadSetts(w_fname)
+        if (r == -1) {
+            infomessage('Error', 'Settings are not loaded')            
+            return(-1)
+        } 
+        return(0)
+    }    
+        
+    #-----------------  interface functions --------------------
+ 
+    rea <- reactiveValues(df_ht = NULL)
+
+       
     observeEvent(input$data_up_butt, {
         
-        res = suppressWarnings(UploadData()) 
-        tmp = res$df_ht
-        tmp = tmp[which(tmp$lev_2==lev2),]        
+        if (!dir.exists(d_folder)) {
+            s = paste0('Folder ', d_folder, ' not found!')
+            infomessage('Error', s)
+            return()
+        }  
+        res = suppressWarnings(UploadData(d_folder)) 
+        data_0 <<- res$out
+        info_0 <<- res$info
+        df_ht_0 <<- res$df_ht
+        
+        
+        withProgress({
+            
+            incProgress(0.7, detail = '')
+            setProgress(message = 'Data saving')
+            
+            SaveData(w_folder)
+        })
+        
+
+        tmp = df_ht_0[which(df_ht_0$lev_2==lev2),]        
         rea$df_ht = tmp
+
         
     })    
+ 
     
+    
+    observeEvent(input$data_sh_butt, {
+        
+        withProgress({
+            
+            incProgress(0.7, detail = '')
+            setProgress(message = 'Data reading')
+            
+            r = ReadData(w_folder)
+        })
+        
+        if (r == -1)   return()
+        
+        tmp = df_ht_0[which(df_ht_0$lev_2==lev2),]        
+        rea$df_ht = tmp        
+    })    
+    
+    
+    
+    
+       
     output$heatmap1 <- renderPlotly({
 
         if (length(rea$df_ht) > 0) {
@@ -328,23 +407,19 @@ server <- function(input, output, session) {
             tmp = rea$df_ht
 
             v = "F"
-            vavg = 1e7
-            eps = 0.002
-            
-            
+
             tmp = dcast(tmp, row ~ col, value.var = v) #, fun.aggregate = sum)
-            #rownames(tmp) = paste0('r', tmp$row)
             tmp = tmp[, 2:ncol(tmp)]
-            #colnames(tmp) = paste0('c', colnames(tmp))
-            
+
             tmp1 = rea$df_ht
             
             palette <- colorRampPalette(c("red", "green", "red"))
             
             p <- plot_ly(z = data.matrix(tmp), x = colnames(tmp), y = rownames(tmp), 
                          type = "heatmap", colors = palette(50), opacity=0.5,
-                         zauto = FALSE, zmin = vavg*(1+eps), zmax = vavg*(1-eps)) %>%
+                         zauto = FALSE, zmin = fmin, zmax = fmax) %>%
                 
+            layout(title="Frequency F")  %>%    
                 
             config(displaylogo = FALSE) %>%
             config(modeBarButtonsToRemove = c("select2d", "lasso2d", "hoverClosestCartesian", "hoverCompareCartesian"))
@@ -356,9 +431,6 @@ server <- function(input, output, session) {
     
 
     
-    
-    
-
     output$heatmap2 <- renderPlotly({
         
         if (length(rea$df_ht) > 0) {
@@ -366,21 +438,17 @@ server <- function(input, output, session) {
             tmp = rea$df_ht
             
             v = "Z"
-            vavg = 50
-            eps = 0.1
-    
-            
+
             tmp = dcast(tmp, row ~ col, value.var = v) #, fun.aggregate = sum)
-            #rownames(tmp) = paste0('r', tmp$row)
             tmp = tmp[, 2:ncol(tmp)]
-            #colnames(tmp) = paste0('c', colnames(tmp))
-            
+
             
             palette <- colorRampPalette(c("red", "green", "red"))
             
             p <- plot_ly(z = data.matrix(tmp), x = colnames(tmp), y = rownames(tmp), 
                          type = "heatmap", colors = palette(50),  opacity=0.5,
-                         zauto = FALSE, zmin = vavg*(1+eps), zmax = vavg*(1-eps)) %>%
+                         zauto = FALSE, zmin = zmin, zmax = zmax) %>%
+            layout(title="Impedance Z")  %>%       
                 
             config(displaylogo = FALSE) %>%
             config(modeBarButtonsToRemove = c("select2d", "lasso2d", "hoverClosestCartesian", "hoverCompareCartesian"))
@@ -389,6 +457,62 @@ server <- function(input, output, session) {
         }
     })
     
+    output$heatmap3 <- renderPlotly({
+        
+        if (length(rea$df_ht) > 0) {
+            
+            tmp = rea$df_ht
+            
+            v = "R"
+            
+            tmp = dcast(tmp, row ~ col, value.var = v) #, fun.aggregate = sum)
+            tmp = tmp[, 2:ncol(tmp)]
+
+            tmp1 = rea$df_ht
+            
+            palette <- colorRampPalette(c("red", "green", "red"))
+            
+            p <- plot_ly(z = data.matrix(tmp), x = colnames(tmp), y = rownames(tmp), 
+                         type = "heatmap", colors = palette(50), opacity=0.5,
+                         zauto = FALSE, zmin = rmin, zmax = rmax) %>%
+                
+                layout(title="Resistance R")  %>%    
+                
+                config(displaylogo = FALSE) %>%
+                config(modeBarButtonsToRemove = c("select2d", "lasso2d", "hoverClosestCartesian", "hoverCompareCartesian"))
+            
+            p       
+        }
+    })
+    
+    
+    
+    
+    output$heatmap4 <- renderPlotly({
+        
+        if (length(rea$df_ht) > 0) {
+            
+            tmp = rea$df_ht
+            
+            v = "X"
+            
+            tmp = dcast(tmp, row ~ col, value.var = v) #, fun.aggregate = sum)
+            tmp = tmp[, 2:ncol(tmp)]
+
+            
+            palette <- colorRampPalette(c("red", "green", "red"))
+            
+            p <- plot_ly(z = data.matrix(tmp), x = colnames(tmp), y = rownames(tmp), 
+                         type = "heatmap", colors = palette(50),  opacity=0.5,
+                         zauto = FALSE, zmin = xmin, zmax = xmax) %>%
+                layout(title="Reactance X")  %>%       
+                
+                config(displaylogo = FALSE) %>%
+                config(modeBarButtonsToRemove = c("select2d", "lasso2d", "hoverClosestCartesian", "hoverCompareCartesian"))
+            
+            p       
+        }
+    })
     
     session$onSessionEnded(function() {
         # close command window
