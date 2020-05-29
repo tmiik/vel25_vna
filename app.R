@@ -22,6 +22,16 @@ if (!is.element("tidyverse", installed.packages()[,1])) {install.packages("tidyv
 if (!is.element("plotly", installed.packages()[,1])) {install.packages("plotly", dependencies = TRUE, repos = mirror)}
 if (!is.element("readr", installed.packages()[,1])) {install.packages("readr", dependencies = TRUE, repos= mirror)}
 
+#------------------------ shinyShortcut
+#if (!is.element("devtools", installed.packages()[,1])) {install.packages("devtools", dependencies = TRUE, repos= mirror)}
+
+# devtools::install_github("ewan-keith/shinyShortcut")
+# (!is.element("shinyShortcut", installed.packages()[,1]))
+
+# library(shinyShortcut)
+# shinyShortcut('H:\\PD\\Vel25\\data2\\bin')
+#------------------------
+
 
 library(shiny)
 library( shinyWidgets)
@@ -39,6 +49,8 @@ library(reshape2)
 
 
 
+
+
 infomessage = function(title, txt)
 {
     showModal(
@@ -47,28 +59,33 @@ infomessage = function(title, txt)
 
 
 
-# move defects detection to backend server !!!
 
 
-#w_folder= getwd()
+#   add all possible control and logging!!!!
 
-folder= '\\\\tmi21\\Private\\R&D\\MechProdDev\\Projects\\Concept Development\\1805 Velocity25\\Testing\\Electrical\\Measurements\\V25-050'
-folder = 'H:\\PD\\Vel25\\data2\\data_load'
-max_col = 5  # maximum number of columns in dataset
+w_folder = 'H:/PD/Vel25/data2/bin/tmp/tmp/vel25_vna-master'
+w_folder = getwd()
 
-lev2 = "TN004-Si"
 
+w_fname = gsub('bin/tmp/tmp/vel25_vna-master', 'work_file.xlsm', w_folder)
+#infomessage('location', w_fname)
+print(w_fname)
+
+
+# d_folder= '\\\\tmi21\\Private\\R&D\\MechProdDev\\Projects\\Concept Development\\1805 Velocity25\\Testing\\Electrical\\Measurements\\V25-050'
+# d_folder = 'H:\\PD\\Vel25\\data2\\data_load'
+# max_col = 5  # maximum number of columns in dataset
 
 
 
 
 
 SaveData = function() {
-    outfilename = paste0(folder, "\\\\", 'data_out.csv')
+    outfilename = paste0(w_folder, "\\\\", 'data_out.csv')
     write.table(out, outfilename, sep = ",",
                 col.names = !file.exists(outfilename), row.names = F, append = T)
     
-    outfilename = paste0(folder, "\\\\", 'info_out.csv')
+    outfilename = paste0(w_folder, "\\\\", 'info_out.csv')
     write.table(info, outfilename, sep = ",",
                 col.names = !file.exists(outfilename), row.names = F, append = T)
 
@@ -78,7 +95,7 @@ SaveData = function() {
 
 
 
-#=====================================================================
+#============================ UI =========================================
 
 
 
@@ -118,9 +135,53 @@ ui <- fluidPage(
     )
 )
 
-# Define server logic required to draw a histogram
-server <- function(input, output) {
+#============================== SERVER =====================================
 
+# Define server logic required to draw a histogram
+server <- function(input, output, session) {
+
+    
+    if (!file.exists(w_fname)) {
+        s = paste0('No file ', w_fname, '!')
+        infomessage('Error', s)
+        stop(s)
+    }
+    
+    setts  <- read_excel(w_fname, sheet = "Run")
+    
+    if (length(setts)==0) {
+        s = paste0('Unable to read settings from the file: ', w_fname)
+        infomessage('Error', s)
+        stop(s)    
+    }
+    
+    d_folder = setts[which(setts$Name == 'd_folder'), ]$Value
+    max_col = as.numeric(setts[which(setts$Name == 'max_col'), ]$Value)
+    
+    
+    if (length(d_folder)==0) {
+        s = paste0('Parameter d_folder not found!')
+        infomessage('Error', s)
+        stop(s)    
+    }
+    if (length(max_col)==0) {
+        s = paste0('Parameter max_col not found!')
+        infomessage('Error', s)
+        stop(s)    
+    }
+    
+    lev2 = "TN004-Si"
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     rea <- reactiveValues(df_ht = NULL)
     
     
@@ -132,7 +193,7 @@ server <- function(input, output) {
         
         
         # list of available files
-        f_list = list.files(folder, include.dirs = FALSE, recursive=TRUE)
+        f_list = list.files(d_folder, include.dirs = FALSE, recursive=TRUE)
         #View(f_list)
         
         #  check if the files are of csv type
@@ -181,7 +242,7 @@ server <- function(input, output) {
                 print(f_name)
                 id = match(f_name, f_list)
                 
-                data  <- read_csv(paste0(folder, "\\\\", f_name ), skip=4, col_types = cols())
+                data  <- read_csv(paste0(d_folder, "\\\\", f_name ), skip=4, col_types = cols())
                 data  <- data[, !is.na(colSums(data)) ]
                 
                 
@@ -193,7 +254,7 @@ server <- function(input, output) {
                 for (i in seq( 1, max_lev-1) ) { tmp[, i] <- NA }
                 colnames(tmp) = levs
                 for (c in head(x, -1) ) {tmp[paste0('lev_', match(c, x))] <- c}
-                tmp['fname'] = tail(x, 1)
+                tmp['w_fname'] = tail(x, 1)
                 
                 tmp['ncols'] = ncol(data)
                 tmp['nrows'] = nrow(data)
@@ -222,7 +283,7 @@ server <- function(input, output) {
         
         # parse coordinates: row and col from file name
         tmp = c()
-        for (c in unique(info$fname) ) {
+        for (c in unique(info$w_fname) ) {
             
             pattern <- "[-]([0-9]{1,2})[-]([0-9]{1,2})[-]"
             b = str_match(c, pattern)
@@ -231,16 +292,16 @@ server <- function(input, output) {
             tmp = rbind(tmp, r)
         }
         tmp = as.data.frame(tmp)
-        colnames(tmp) = c('fname', 'col', 'row')
+        colnames(tmp) = c('w_fname', 'col', 'row')
         tmp['col'] = str_pad(tmp$col, 2, pad = "0")
         tmp['row'] = str_pad(tmp$row, 2, pad = "0")
         
-        info <- merge(x = info, y = tmp, by = 'fname', all.x = TRUE)
-        info = info[ c("id",  "path", "nrows", "ncols", levs, "fname", "col", "row" )]
+        info <- merge(x = info, y = tmp, by = 'w_fname', all.x = TRUE)
+        info = info[ c("id",  "path", "nrows", "ncols", levs, "w_fname", "col", "row" )]
         
         
         # data for heatmaps
-        df_ht = info[ c("id",  levs, "fname", "col", "row" )]
+        df_ht = info[ c("id",  levs, "w_fname", "col", "row" )]
         df_ht = df_ht[which(!is.na(df_ht$col)), ]
         df_ht <- merge(x = df_ht, y = out[out$Smin, ], by = 'id', all.x = TRUE)
         
@@ -249,22 +310,7 @@ server <- function(input, output) {
     
     
     
-    w_folder = getwd()
-    #infomessage('location', w_folder)
 
-    fname = gsub('bin/tmp/tmp/vel25_vna-master', 'work_file.xlsm', w_folder)
-    
-    if (file.exists(fname)) {
-        
-        setts  <- read_excel(fname, sheet = "Setup")
-        s = setts[which(setts$Name == 'browser'), ]$Path
-        
-        infomessage('browser', s)
-
-    }      
-    
-    
-    
     
     observeEvent(input$data_up_butt, {
         
@@ -342,6 +388,13 @@ server <- function(input, output) {
             p       
         }
     })
+    
+    
+    session$onSessionEnded(function() {
+        # close command window
+        stopApp()
+    })    
+    
     
 }
 
