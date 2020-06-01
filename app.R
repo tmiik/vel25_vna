@@ -151,7 +151,7 @@ server <- function(input, output, session) {
             return(-1) 
         }
         
-        setts  <- read_excel(w_fname, sheet = "Run")
+        setts  <- read_excel(w_fname, sheet = "Data_Parameters")
         
         if (length(setts)==0) {
             s = paste0('Unable to read settings from the file: ', w_fname)
