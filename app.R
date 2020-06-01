@@ -1,9 +1,13 @@
 
 # color parameters from file
 # make color range reactive
+# allow asyncronic from excel
+
 # filters
 # heat map pixel highlight
+# add button for d_folder in excel?
 
+# check user access to data folder
 
 #====================================================
 
@@ -66,7 +70,7 @@ infomessage = function(title, txt)
 #   add all possible control and logging!!!!
 
 w_folder = 'H:/PD/Vel25/data2/bin/tmp/tmp/vel25_vna-master'
-#w_folder = getwd()
+w_folder = getwd()
 
 
 w_fname = gsub('bin/tmp/tmp/vel25_vna-master', 'work_file.xlsm', w_folder)
