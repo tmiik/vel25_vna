@@ -7,7 +7,6 @@
 # heat map pixel highlight
 # add button for d_folder in excel?
 
-# check user access to data folder
 
 #====================================================
 
@@ -70,7 +69,7 @@ infomessage = function(title, txt)
 #   add all possible control and logging!!!!
 
 w_folder = 'H:/PD/Vel25/data2/bin/tmp/tmp/vel25_vna-master'
-w_folder = getwd()
+#w_folder = getwd()
 
 
 w_fname = gsub('bin/tmp/tmp/vel25_vna-master', 'work_file.xlsm', w_folder)
@@ -151,7 +150,7 @@ server <- function(input, output, session) {
             return(-1) 
         }
         
-        setts  <- read_excel(w_fname, sheet = "Data_Parameters")
+        setts  <- read_excel(w_fname, sheet = "Run")
         
         if (length(setts)==0) {
             s = paste0('Unable to read settings from the file: ', w_fname)
