@@ -86,7 +86,7 @@ ui <- fluidPage(
 
         # Show a plot of the generated distribution
         mainPanel(
-            h4("Average values are shown on heatmaps in the case of multiple files!"),
+            h5("Average values are shown on heatmaps in the case of multiple files!"),
             fluidRow(width=16,
                      column(width=6,
                             plotlyOutput("heatmap1") ),
