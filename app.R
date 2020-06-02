@@ -1,18 +1,4 @@
 
-# color parameters from file
-# make color range reactive
-# allow asyncronic from excel
-
-# filters
-# heat map pixel highlight
-# add button for d_folder in excel?
-
-# check user access to data folder
-# create bat file on different button
-# clean app file
-
-# check col row labels and mean vakues!
-
 
 #====================================================
 
@@ -51,8 +37,6 @@ library(reshape2)
 
 
 
-
-
 infomessage = function(title, txt)
 {
     showModal(
@@ -60,10 +44,7 @@ infomessage = function(title, txt)
 }
 
 
-
-
-
-#   add all possible control and logging!!!!
+#========================================================================
 
 w_folder = getwd()
 if (w_folder == "H:/PD/Vel25/vel25_analysis/vel25_app1") { 
@@ -76,20 +57,11 @@ w_fname = gsub('bin/tmp/tmp/vel25_vna-master', 'work_file.xlsm', w_folder)
 print(w_fname)
 
 
-# d_folder= '\\\\tmi21\\Private\\R&D\\MechProdDev\\Projects\\Concept Development\\1805 Velocity25\\Testing\\Electrical\\Measurements\\V25-050'
-
-# get user name
-# Sys.getenv("USERNAME")
-
-
-
-
 
 #============================ UI =========================================
 
 
 
-# Define UI for application that draws a histogram
 ui <- fluidPage(
     
 
@@ -114,7 +86,7 @@ ui <- fluidPage(
 
         # Show a plot of the generated distribution
         mainPanel(
-            
+            h4("Average values are shown on heatmaps in the case of multiple files!"),
             fluidRow(width=16,
                      column(width=6,
                             plotlyOutput("heatmap1") ),
@@ -137,7 +109,7 @@ ui <- fluidPage(
 
 #============================== SERVER =====================================
 
-# Define server logic required to draw a histogram
+
 server <- function(input, output, session) {
 
     rea <- reactiveValues(df_ht = NULL)
@@ -277,7 +249,13 @@ server <- function(input, output, session) {
                     if (ncol(data)+1 < rea_st$max_col) {
                         for (i in seq( ncol(data)+1, rea_st$max_col, by=1) ) { data[, i] <- NA }
                     }
-                    colnames(data) = c('F', 'S', 'Z', 'R', 'X') 
+                    
+                    cols = c('F', 'S', 'Z', 'R', 'X') 
+                    lc = length(cols)
+                    if (rea_st$max_col > lc) { cols = c(cols, paste0("D", seq(lc+1, rea_st$max_col)))}
+                    if (rea_st$max_col < lc) { cols = head(cols, rea_st$max_col) }    
+                        
+                    colnames(data) = cols
                     
                     data['Smin'] = data$S==min(data$S)
                     
@@ -606,5 +584,12 @@ server <- function(input, output, session) {
 }
 
 
-# Run the application 
 shinyApp(ui = ui, server = server)
+
+
+
+
+# get user name for  R & browser lists of multiple users
+# Sys.getenv("USERNAME")
+
+# check user access to data folder
