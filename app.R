@@ -220,8 +220,17 @@ server <- function(input, output, session) {
                 id = match(f_name, f_list)
                 
                 data  <- read_csv(paste0(d_folder, "\\\\", f_name ), skip=4, col_types = cols())
-                data  <- data[, !is.na(colSums(data)) ]
+                if (ncol(data) < 2) next
                 
+                # exclude columns containing non-numeric data
+                tmp = apply(data, MARGIN = c(1,2), 'as.logical')
+                tmp = apply(tmp, MARGIN = c(1,2), 'as.integer')
+                tmp = as.data.frame(apply(tmp, 2, prod))
+               
+                ix = which(tmp[,1] ==1)
+                rownames(tmp)[ix]
+                data  <- data[ rownames(tmp)[ix] ]
+                if (ncol(data) < 2) next
                 
                 # file path parsing
                 x = unlist(strsplit(f_name, "\\\\"))
@@ -250,6 +259,7 @@ server <- function(input, output, session) {
                         for (i in seq( ncol(data)+1, rea_st$max_col, by=1) ) { data[, i] <- NA }
                     }
                     
+                    # adjust target columns (add new or remove columns)
                     cols = c('F', 'S', 'Z', 'R', 'X') 
                     lc = length(cols)
                     if (rea_st$max_col > lc) { cols = c(cols, paste0("D", seq(lc+1, rea_st$max_col)))}
@@ -279,7 +289,7 @@ server <- function(input, output, session) {
         }
         tmp = as.data.frame(tmp)
         colnames(tmp) = c('w_fname', 'col', 'row')
-        tmp['col'] = str_pad(tmp$col, 2, pad = "0")
+        tmp['col'] = str_pad(tmp$col, 2, pad = "0") # add leading zeros
         tmp['row'] = str_pad(tmp$row, 2, pad = "0")
         
         info <- merge(x = info, y = tmp, by = 'w_fname', all.x = TRUE)
@@ -593,3 +603,5 @@ shinyApp(ui = ui, server = server)
 # Sys.getenv("USERNAME")
 
 # check user access to data folder
+# capture output cmd window in excel file
+
