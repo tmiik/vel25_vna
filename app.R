@@ -50,11 +50,11 @@ w_folder = getwd()
 if (w_folder == "H:/PD/Vel25/vel25_analysis/vel25_app1") { 
     w_folder = 'H:/PD/Vel25/vel25_analysis/bin/tmp/tmp/vel25_vna-master' 
     }
-print(w_folder)
+#print(w_folder)
 
 
 w_fname = gsub('bin/tmp/tmp/vel25_vna-master', 'work_file.xlsm', w_folder)
-print(w_fname)
+#print(w_fname)
 
 
 
