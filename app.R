@@ -44,6 +44,21 @@ infomessage = function(title, txt)
 }
 
 
+
+myTryCatch <- function(expr) {
+    warn <- err <- NULL
+    value <- withCallingHandlers(
+        tryCatch(expr, error=function(e) {
+            err <<- e
+            NULL
+        }), warning=function(w) {
+            warn <<- w
+            invokeRestart("muffleWarning")
+        })
+    list(value=value, warning=warn, error=err)
+}
+
+
 #========================================================================
 
 w_folder = getwd()
@@ -53,9 +68,19 @@ if (w_folder == "H:/PD/Vel25/vel25_analysis/vel25_app1") {
 #print(w_folder)
 
 
-w_fname = gsub('bin/tmp/tmp/vel25_vna-master', 'work_file.xlsm', w_folder)
+
+if ( grepl('vel25_vna-master', w_folder, fixed = TRUE) ) {
+    arcname = 'vel25_vna-master'
+}
+
+if ( grepl('test-master', w_folder, fixed = TRUE) ) {
+    arcname = 'test-master'
+}
+w_fname = gsub(paste0('bin/tmp/tmp/', arcname), 'work_file.xlsm', w_folder) 
 #print(w_fname)
 
+
+palette <- colorRampPalette(c("indianred1", "chartreuse2", "indianred1"))
 
 
 #============================ UI =========================================
@@ -88,19 +113,25 @@ ui <- fluidPage(
         mainPanel(
             h5("Average values are shown on heatmaps in the case of multiple files!"),
             fluidRow(width=16,
-                     column(width=6,
-                            plotlyOutput("heatmap1") ),
-                     
-                     column(width=6,
-                            plotlyOutput("heatmap2") )
-
-            ),
+                     column(width=12,
+                            plotlyOutput("heatmap1", width = '100%', height = 500) ) ),
+            br(), br(),
+            fluidRow(width=12,
+                     column(width=12,
+                            plotlyOutput("heatmap2", width = '100%', height = 500) ) ), 
+            
+            br(), br(),
             fluidRow(width=16,
-                     column(width=6,
-                            plotlyOutput("heatmap3") ),
-                     
-                     column(width=6,
-                            plotlyOutput("heatmap4") )
+                     column(width=12,
+                            plotlyOutput("heatmap3", width = '100%', height = 500) ) ),
+            br(), br(),
+            fluidRow(width=16,
+                     column(width=12,
+                            plotlyOutput("heatmap4", width = '100%', height = 500) ) ),
+            br(), br(),
+            fluidRow(width=12,
+                     column(width=12,
+                            plotlyOutput("heatmap5", width = '100%', height = 500) )
                      
             )            
         )
@@ -168,18 +199,29 @@ server <- function(input, output, session) {
  
     UploadData = function(d_folder) {
         
-        # list of available files
-        f_list = list.files(d_folder, include.dirs = FALSE, recursive=TRUE)
-
-        #  check if the files are of csv type
-        ix = c()
-        f = f_list[1]
-        for (f in f_list) { 
-            s = unlist(strsplit(f, "\\."))
-            ix = c(ix, (("csv" %in% s) ) & (substring(s[1], 1, 1) != '~') &  
-                       (!('data_out' %in% s[1])) &  (!('info_out' %in% s[1])) ) 
-        }
-        f_list = f_list[ix]
+        withProgress({
+        
+            incProgress(0.7, detail = '')
+            setProgress(message = 'Files analizing')
+            
+            # list of available files
+            f_list = list.files(d_folder, include.dirs = FALSE, recursive=TRUE)
+    
+            #  check if the files are of csv type
+            ix = c()
+            f = f_list[253]
+            for (f in f_list) { 
+                s = unlist(strsplit(f, "\\."))  # split by dot '.'
+                s1 = unlist(strsplit(f, "/"))  # split by slash '/'
+                  
+                ix = c(ix, (tail(s, 1)=='csv' ) & !grepl('~', f, fixed = TRUE) &
+                           !("OLD" %in% toupper(s1)) & 
+                           !grepl('DATA_OUT', toupper(tail(s1, 1)), fixed = TRUE) & 
+                           !grepl('INFO_OUT', toupper(tail(s1, 1)), fixed = TRUE) )
+                       
+            }
+            f_list = f_list[ix]
+        })
         
         if (length(f_list) == 0) {
             df_error = data.frame(c('No available csv files!'))
@@ -187,7 +229,7 @@ server <- function(input, output, session) {
             
             s = paste0('No available csv files!')
             infomessage('Error', s)
-            return(-1)                 
+            return()                 
         }
         
         f_list = gsub("/", "\\\\", f_list)
@@ -202,6 +244,7 @@ server <- function(input, output, session) {
         }
         levs =  paste0('lev_', seq( 1, max_lev-1 ) )
         
+
         
         out = data.frame()
         info = data.frame()
@@ -211,8 +254,8 @@ server <- function(input, output, session) {
             f_name = f_list[3]  
             for (f_name in f_list) {
                 
-                incProgress(1/length(f_list), detail = 'data loading')
-                setProgress(message = f_name)
+                incProgress(1/length(f_list), detail = f_name)
+                setProgress(message = 'Data loading')
                 
                 print('......................................................')
                 
@@ -276,13 +319,25 @@ server <- function(input, output, session) {
             }
             
         })
-        
+        # transformed resistance and reactance
+        if (('R' %in% colnames(out)) & ('X' %in% colnames(out))) {
+            r = out$R
+            x = out$X
+            out['RT'] <- (1 - r^2 - x^2) / ( (1 - r)^2 + x^2)
+            out['XT'] <- 2*x  / ( (1 - r)^2 + x^2)
+            cols = c('RT','XT')
+        }  
+
+        c = info$w_fname[1]
         # parse coordinates: row and col from file name
+        pattern <- "[-]([0-9]{1,2})[-]([0-9]{1,2})[-]"
         tmp = c()
         for (c in unique(info$w_fname) ) {
+            s = unlist(strsplit(c, "[(]"))[1]  # ignore all after bracket "("
+            s = gsub(" ", "-", s, fixed = TRUE)
+            s = gsub(".", "-", s, fixed = TRUE)
             
-            pattern <- "[-]([0-9]{1,2})[-]([0-9]{1,2})[-]"
-            b = str_match(c, pattern)
+            b = str_match(s, pattern)
             r = c(c, b[2], b[3])
             
             tmp = rbind(tmp, r)
@@ -295,9 +350,8 @@ server <- function(input, output, session) {
         info <- merge(x = info, y = tmp, by = 'w_fname', all.x = TRUE)
         info = info[ c("id",  "path", "nrows", "ncols", levs, "w_fname", "col", "row" )]
         
-        
         # data for heatmaps
-        df_ht = info[ c("id",  levs, "w_fname", "col", "row" )]
+        df_ht = info[ c("id",  levs,  "w_fname", "col", "row" )]
         df_ht = df_ht[which(!is.na(df_ht$col)), ]
         df_ht <- merge(x = df_ht, y = out[out$Smin, ], by = 'id', all.x = TRUE)
         
@@ -307,21 +361,27 @@ server <- function(input, output, session) {
     
 
     SaveData = function(w_folder) {
-        fdir = gsub('bin/tmp/tmp/vel25_vna-master', '', w_folder)
+        fdir = gsub(paste0('bin/tmp/tmp/', arcname), '', w_folder)
         
         outfilename = paste0(fdir, 'data_out.csv')
-        write.table(data_0, outfilename, sep = ",",
-                    col.names = !file.exists(outfilename), row.names = F, append = F)
+
+        s = 'write.table(data_0, outfilename, sep = ",", col.names = T, row.names = F, append = F)'
+        s = myTryCatch ( eval(parse(text=s)) )        
+        if (!is.null(s$error)) infomessage('Error', paste('Data is not saved. ','\nCheck the file', outfilename))      
+        
+        # write.table(data_0, outfilename, sep = ",",
+        #             col.names = !file.exists(outfilename), row.names = F, append = F)
         
         outfilename = paste0(fdir, 'info_out.xlsx')
-        write_xlsx(list(Info = info_0, HM_data = df_ht_0), outfilename)        
-        # write.table(info_0, outfilename, sep = ",",
-        #             col.names = !file.exists(outfilename), row.names = F, append = F)
+        s = 'write_xlsx(list(Info = info_0, HM_data = df_ht_0), outfilename)'
+        s = myTryCatch ( eval(parse(text=s)) )            
+        if (!is.null(s$error)) infomessage('Error', paste('Data is not saved. ','\nCheck the file', outfilename))      
+
     }
 
     
     ReadData = function(w_folder) {
-        fdir = gsub('bin/tmp/tmp/vel25_vna-master', '', w_folder)
+        fdir = gsub(paste0('bin/tmp/tmp/', arcname), '', w_folder)
         
         outfilename = paste0(fdir, 'data_out.csv')
         if (!file.exists(outfilename)) {
@@ -360,7 +420,9 @@ server <- function(input, output, session) {
             return()
         }  
 
-        res = suppressWarnings(UploadData(d_folder)) 
+         res = suppressWarnings(UploadData(d_folder)) 
+        if (is.null(res)) {return ()}
+        
         data_0 <<- res$out
         info_0 <<- res$info
         df_ht_0 <<- res$df_ht
@@ -379,7 +441,7 @@ server <- function(input, output, session) {
         updatePickerInput(session, "Lev1_input",
                           choices = lev1_list, selected = lev1_list  )
         
-        lev2_list <- c()
+        lev2_list <- character(0)
         if ('lev_2' %in% colnames(df_ht_0)) {
             lev2_list <- sort(as.vector(unique(df_ht_0$lev_2)))
         }
@@ -392,7 +454,7 @@ server <- function(input, output, session) {
     
     # read data button
     observeEvent(input$data_rd_butt, {
-        
+
         withProgress({
             
             incProgress(0.7, detail = '')
@@ -407,7 +469,7 @@ server <- function(input, output, session) {
         updatePickerInput(session, "Lev1_input",
                           choices = lev1_list, selected = lev1_list  )
         
-        lev2_list <- c()
+        lev2_list <- character(0)
         if ('lev_2' %in% colnames(df_ht_0)) {
             lev2_list <- sort(as.vector(unique(df_ht_0$lev_2)))
         }
@@ -420,14 +482,14 @@ server <- function(input, output, session) {
         if (exists('df_ht_0')) {
  
             tmp = df_ht_0 %>% filter(lev_1 %in% input$Lev1_input)
-         
+            
+            x = character(0)
             if ('lev_2' %in% colnames(tmp)) {
                 x <- sort(as.vector(unique(tmp$lev_2)))
-                updatePickerInput(session, "Lev2_input", choices = x, selected = x  )
-            } else { 
-                rea$df_ht = tmp 
-                }
-
+            } 
+            rea$df_ht = tmp
+            updatePickerInput(session, "Lev2_input", choices = x, selected = x  )
+            
         }
     }, ignoreNULL = FALSE)
     
@@ -457,7 +519,12 @@ server <- function(input, output, session) {
         if (nrow(rea$df_ht) > 0) {
             
             tmp = rea$df_ht
-
+            
+            anno_x <- paste0("c", tmp$col)
+            anno_y <- paste0("r", tmp$row)
+            anno_text <- paste0('[', tmp$col, ',', tmp$row, ']')
+            
+            
             v = "F"
 
             tmp = dcast(tmp, row ~ col, value.var = v, fun.aggregate = mean,  na.rm = F)
@@ -465,13 +532,16 @@ server <- function(input, output, session) {
             colnames(tmp) = paste0("c", colnames(tmp))
             tmp = tmp[, 2:ncol(tmp)]
 
-            palette <- colorRampPalette(c("red", "green", "red"))
-            
+
             p <- plot_ly(z = data.matrix(tmp), x = colnames(tmp), y = rownames(tmp), 
-                         type = "heatmap", colors = palette(50), opacity=0.5,
+                         type = "heatmap", colors = palette(50), opacity=0.6,
                          zauto = FALSE, zmin = rea_st$fmin, zmax = rea_st$fmax) %>%
                 
-            layout(title="Frequency F")  %>%    
+            layout(title="<b>Frequency F</b>", title = list( font = list(size = 18)), xaxis = list( title = "Notch/Wafer location",
+                                                      titlefont = list(size = 16)) )  %>%    
+                
+            add_annotations(x = anno_x, y = anno_y, text = anno_text,  xshift = 0,  yshift = 150/length(unique(anno_y)),
+                            showarrow = FALSE, font=list(color='brown', size=8))  %>%
                 
             config(displaylogo = FALSE) %>%
             config(modeBarButtonsToRemove = c("select2d", "lasso2d", "hoverClosestCartesian", "hoverCompareCartesian"))
@@ -480,7 +550,6 @@ server <- function(input, output, session) {
         }
     })
 
-    
 
     
     output$heatmap2 <- renderPlotly({
@@ -490,7 +559,11 @@ server <- function(input, output, session) {
         if (nrow(rea$df_ht) > 0) {
 
             tmp = rea$df_ht
-
+            
+            anno_x <- paste0("c", tmp$col)
+            anno_y <- paste0("r", tmp$row)
+            anno_text <- paste0('[', tmp$col, ',', tmp$row, ']')
+            
             v = "Z"
             if (sum(!is.na(tmp[v])) >0) {
                 tmp = dcast(tmp, row ~ col, value.var = v, fun.aggregate = mean,  na.rm = T)
@@ -499,12 +572,15 @@ server <- function(input, output, session) {
                 tmp = tmp[, 2:ncol(tmp)]
     
     
-                palette <- colorRampPalette(c("red", "green", "red"))
-    
                 p <- plot_ly(z = data.matrix(tmp), x = colnames(tmp), y = rownames(tmp),
-                             type = "heatmap", colors = palette(50),  opacity=0.5,
+                             type = "heatmap", colors = palette(50),  opacity=0.6,
                              zauto = FALSE, zmin = rea_st$zmin, zmax = rea_st$zmax) %>%
-                layout(title="Impedance Z")  %>%
+                layout(title="<b>Impedance Z</b> ", title = list( font = list(size = 18)), xaxis = list( title = "Notch/Wafer location",
+                                                          titlefont = list(size = 16)) )  %>%    
+                    
+                add_annotations(x = anno_x, y = anno_y, text = anno_text,  xshift = 0,  yshift = 150/length(unique(anno_y)),
+                                    showarrow = FALSE, font=list(color='brown', size=8))  %>%
+
     
                 config(displaylogo = FALSE) %>%
                 config(modeBarButtonsToRemove = c("select2d", "lasso2d", "hoverClosestCartesian", "hoverCompareCartesian"))
@@ -522,8 +598,12 @@ server <- function(input, output, session) {
         if (nrow(rea$df_ht) > 0) {
 
             tmp = rea$df_ht
-
-            v = "R"
+            
+            anno_x <- paste0("c", tmp$col)
+            anno_y <- paste0("r", tmp$row)
+            anno_text <- paste0('[', tmp$col, ',', tmp$row, ']')
+            
+            v = "RT"
             
             if (sum(!is.na(tmp[v])) >0) {
 
@@ -533,14 +613,17 @@ server <- function(input, output, session) {
                 tmp = tmp[, 2:ncol(tmp)]
     
     
-                palette <- colorRampPalette(c("red", "green", "red"))
-    
                 p <- plot_ly(z = data.matrix(tmp), x = colnames(tmp), y = rownames(tmp),
-                             type = "heatmap", colors = palette(50), opacity=0.5,
+                             type = "heatmap", colors = palette(50), opacity=0.6,
                              zauto = FALSE, zmin = rea_st$rmin, zmax = rea_st$rmax) %>%
     
-                    layout(title="Resistance R")  %>%
-    
+                    layout(title="<b>Resistance R (transformed)</b>", title = list( font = list(size = 18)), xaxis = list( title = "Notch/Wafer location",
+                                                               titlefont = list(size = 16)) )  %>%    
+                    
+                    add_annotations(x = anno_x, y = anno_y, text = anno_text,  xshift = 0,  yshift = 150/length(unique(anno_y)),
+                                    showarrow = FALSE, font=list(color='brown', size=8))  %>%
+                    
+
                     config(displaylogo = FALSE) %>%
                     config(modeBarButtonsToRemove = c("select2d", "lasso2d", "hoverClosestCartesian", "hoverCompareCartesian"))
     
@@ -559,8 +642,12 @@ server <- function(input, output, session) {
         if (nrow(rea$df_ht) > 0) {
 
             tmp = rea$df_ht
-
-            v = "X"
+            
+            anno_x <- paste0("c", tmp$col)
+            anno_y <- paste0("r", tmp$row)
+            anno_text <- paste0('[', tmp$col, ',', tmp$row, ']')
+            
+            v = "XT"
             
             if (sum(!is.na(tmp[v])) >0) {
                 
@@ -570,13 +657,16 @@ server <- function(input, output, session) {
                 tmp = tmp[, 2:ncol(tmp)]
     
     
-                palette <- colorRampPalette(c("red", "green", "red"))
-    
                 p <- plot_ly(z = data.matrix(tmp), x = colnames(tmp), y = rownames(tmp),
-                             type = "heatmap", colors = palette(50),  opacity=0.5,
+                             type = "heatmap", colors = palette(50),  opacity=0.6,
                              zauto = FALSE, zmin = rea_st$xmin, zmax = rea_st$xmax) %>%
-                    layout(title="Reactance X")  %>%
-    
+                    layout(title="<b>Reactance X (transformed)</b>", title = list( font = list(size = 18)), xaxis = list( title = "Notch/Wafer location",
+                                                              titlefont = list(size = 16)) )  %>%    
+                    
+                    add_annotations(x = anno_x, y = anno_y, text = anno_text,  xshift = 0,  yshift = 150/length(unique(anno_y)),
+                                    showarrow = FALSE, font=list(color='brown', size=8))  %>%
+                    
+
                     config(displaylogo = FALSE) %>%
                     config(modeBarButtonsToRemove = c("select2d", "lasso2d", "hoverClosestCartesian", "hoverCompareCartesian"))
     
@@ -584,6 +674,49 @@ server <- function(input, output, session) {
             }
         }
     })
+    
+    
+    output$heatmap5 <- renderPlotly({
+        
+        if (is.null(rea$df_ht)) return()
+        
+        if (nrow(rea$df_ht) > 0) {
+            
+            tmp = rea$df_ht
+            
+            anno_x <- paste0("c", tmp$col)
+            anno_y <- paste0("r", tmp$row)
+            anno_text <- paste0('[', tmp$col, ',', tmp$row, ']')
+            
+            v = "S"
+            
+            if (sum(!is.na(tmp[v])) >0) {
+                
+                tmp = dcast(tmp, row ~ col, value.var = v, fun.aggregate = mean,  na.rm = F)
+                rownames(tmp) = paste0("r", tmp$row)
+                colnames(tmp) = paste0("c", colnames(tmp))
+                tmp = tmp[, 2:ncol(tmp)]
+                
+                
+                p <- plot_ly(z = data.matrix(tmp), x = colnames(tmp), y = rownames(tmp),
+                             type = "heatmap", colors = palette(50),  opacity=0.6,
+                             zauto = FALSE, zmin = rea_st$smin, zmax = rea_st$smax) %>%
+                    layout(title="<b>Insertion Loss</b>", title = list( font = list(size = 18)), xaxis = list( title = "Notch/Wafer location",
+                                                                                                            titlefont = list(size = 16)) )  %>%    
+                    
+                    add_annotations(x = anno_x, y = anno_y, text = anno_text,  xshift = 0,  yshift = 150/length(unique(anno_y)),
+                                    showarrow = FALSE, font=list(color='brown', size=8))  %>%
+                    
+                    
+                    config(displaylogo = FALSE) %>%
+                    config(modeBarButtonsToRemove = c("select2d", "lasso2d", "hoverClosestCartesian", "hoverCompareCartesian"))
+                
+                p
+            }
+        }
+    })
+    
+    
     
     session$onSessionEnded(function() {
         
@@ -604,4 +737,6 @@ shinyApp(ui = ui, server = server)
 
 # check user access to data folder
 # capture output cmd window in excel file
+# check as.logical
+
 
