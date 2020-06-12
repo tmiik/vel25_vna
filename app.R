@@ -83,6 +83,18 @@ w_fname = gsub(paste0('bin/tmp/tmp/', arcname), 'work_file.xlsm', w_folder)
 palette <- colorRampPalette(c("indianred1", "chartreuse2", "indianred1"))
 
 
+# fixed wafer template (col/row)
+cr_list = data.frame()
+for (c in seq(1:16)) {
+    for (r in seq(1:6)) cr_list = rbind(cr_list, c(c, r))
+}
+colnames(cr_list) = c('col', 'row')
+cr_list['col'] = str_pad(cr_list$col, 2, pad = "0") # add leading zeros
+cr_list['row'] = str_pad(cr_list$row, 2, pad = "0")
+
+
+
+
 #============================ UI =========================================
 
 
@@ -175,6 +187,8 @@ server <- function(input, output, session) {
         rea_st$rmin <- as.numeric(setts[which(setts$Name == 'rmin'), ]$Value)  
         rea_st$xmax <- as.numeric(setts[which(setts$Name == 'xmax'), ]$Value)
         rea_st$xmin <- as.numeric(setts[which(setts$Name == 'xmin'), ]$Value)      
+        rea_st$smax <- as.numeric(setts[which(setts$Name == 'smax'), ]$Value)
+        rea_st$smin <- as.numeric(setts[which(setts$Name == 'smin'), ]$Value)     
         
         if (length(d_folder)==0) {
             s = paste0('Parameter d_folder not found!')
@@ -427,6 +441,7 @@ server <- function(input, output, session) {
         info_0 <<- res$info
         df_ht_0 <<- res$df_ht
         
+
         
         withProgress({
             
@@ -488,6 +503,10 @@ server <- function(input, output, session) {
                 x <- sort(as.vector(unique(tmp$lev_2)))
             } 
             rea$df_ht = tmp
+            if (nrow(rea$df_ht) > 0) {
+                rea$df_ht = merge(x=cr_list, y=tmp, all.x = T, by = c('col', 'row'))
+            }
+            
             updatePickerInput(session, "Lev2_input", choices = x, selected = x  )
             
         }
@@ -503,6 +522,9 @@ server <- function(input, output, session) {
                 tmp = tmp %>% filter(lev_2 %in% input$Lev2_input)  
             }                        
             rea$df_ht = tmp
+            if (nrow(rea$df_ht) > 0) {
+                rea$df_ht = merge(x=cr_list, y=tmp, all.x = T, by = c('col', 'row'))
+            }
             
         }
     }, ignoreNULL = FALSE)
@@ -527,18 +549,22 @@ server <- function(input, output, session) {
             
             v = "F"
 
+            
             tmp = dcast(tmp, row ~ col, value.var = v, fun.aggregate = mean,  na.rm = F)
             rownames(tmp) = paste0("r", tmp$row)
             colnames(tmp) = paste0("c", colnames(tmp))
-            tmp = tmp[, 2:ncol(tmp)]
+            tmp = tmp[, 2:ncol(tmp)]  
+            tmp =  tmp[rev(rownames(tmp)), ]
+            
+            xform <- list(title = "Notch/Wafer location", titlefont = list(size = 16))           
+            #yform <- list(categoryorder = "array",  categoryarray = rownames(tmp)  )                  
 
 
             p <- plot_ly(z = data.matrix(tmp), x = colnames(tmp), y = rownames(tmp), 
                          type = "heatmap", colors = palette(50), opacity=0.6,
                          zauto = FALSE, zmin = rea_st$fmin, zmax = rea_st$fmax) %>%
                 
-            layout(title="<b>Frequency F</b>", title = list( font = list(size = 18)), xaxis = list( title = "Notch/Wafer location",
-                                                      titlefont = list(size = 16)) )  %>%    
+            layout(title="<b>Frequency F</b>", title = list( font = list(size = 18)), xaxis = xform )  %>%    
                 
             add_annotations(x = anno_x, y = anno_y, text = anno_text,  xshift = 0,  yshift = 150/length(unique(anno_y)),
                             showarrow = FALSE, font=list(color='brown', size=8))  %>%
@@ -570,7 +596,8 @@ server <- function(input, output, session) {
                 rownames(tmp) = paste0("r", tmp$row)
                 colnames(tmp) = paste0("c", colnames(tmp))
                 tmp = tmp[, 2:ncol(tmp)]
-    
+                tmp =  tmp[rev(rownames(tmp)), ]
+                
     
                 p <- plot_ly(z = data.matrix(tmp), x = colnames(tmp), y = rownames(tmp),
                              type = "heatmap", colors = palette(50),  opacity=0.6,
@@ -611,7 +638,8 @@ server <- function(input, output, session) {
                 rownames(tmp) = paste0("r", tmp$row)
                 colnames(tmp) = paste0("c", colnames(tmp))
                 tmp = tmp[, 2:ncol(tmp)]
-    
+                tmp =  tmp[rev(rownames(tmp)), ]
+                
     
                 p <- plot_ly(z = data.matrix(tmp), x = colnames(tmp), y = rownames(tmp),
                              type = "heatmap", colors = palette(50), opacity=0.6,
@@ -655,7 +683,8 @@ server <- function(input, output, session) {
                 rownames(tmp) = paste0("r", tmp$row)
                 colnames(tmp) = paste0("c", colnames(tmp))
                 tmp = tmp[, 2:ncol(tmp)]
-    
+                tmp =  tmp[rev(rownames(tmp)), ]
+                
     
                 p <- plot_ly(z = data.matrix(tmp), x = colnames(tmp), y = rownames(tmp),
                              type = "heatmap", colors = palette(50),  opacity=0.6,
@@ -675,6 +704,7 @@ server <- function(input, output, session) {
         }
     })
     
+   
     
     output$heatmap5 <- renderPlotly({
         
@@ -689,6 +719,7 @@ server <- function(input, output, session) {
             anno_text <- paste0('[', tmp$col, ',', tmp$row, ']')
             
             v = "S"
+            palette <- colorRampPalette(c( "chartreuse2", "indianred1"))
             
             if (sum(!is.na(tmp[v])) >0) {
                 
@@ -696,6 +727,7 @@ server <- function(input, output, session) {
                 rownames(tmp) = paste0("r", tmp$row)
                 colnames(tmp) = paste0("c", colnames(tmp))
                 tmp = tmp[, 2:ncol(tmp)]
+                tmp =  tmp[rev(rownames(tmp)), ]
                 
                 
                 p <- plot_ly(z = data.matrix(tmp), x = colnames(tmp), y = rownames(tmp),
