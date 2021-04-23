@@ -258,6 +258,11 @@ server <- function(input, output, session) {
         }
         levs =  paste0('lev_', seq( 1, max_lev-1 ) )
         
+        if (max_lev == 1) { 
+            s = paste0('It is expected to have 2-leves hierarchy inside the selected folder!')
+            infomessage('Error', s)
+            return()                     
+        }        
 
         
         out = data.frame()
@@ -296,9 +301,11 @@ server <- function(input, output, session) {
                     infomessage('Error', s)
                     return(-1)                     
                     }
-                
+                #
                 tmp = data.frame(0)
-                for (i in seq( 1, max_lev-1) ) { tmp[, i] <- NA }
+                for (i in seq( 1, max_lev-1) ) { tmp[, i] <- NA  }
+                #for (i in seq( 1, 1-1) ) { tmp[, i] <- NA  }
+                
                 colnames(tmp) = levs
                 for (c in head(x, -1) ) {tmp[paste0('lev_', match(c, x))] <- c}
                 tmp['w_fname'] = tail(x, 1)
